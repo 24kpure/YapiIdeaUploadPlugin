@@ -1136,7 +1136,7 @@ public class BuildJsonForYapi {
         matcher.appendTail(sb);
         String result = sb.toString();
         if (result.startsWith(DASH)) {
-            result.substring(DASH.length());
+            result = result.substring(DASH.length());
         }
         return result;
     }
