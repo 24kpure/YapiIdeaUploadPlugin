@@ -45,12 +45,15 @@ import com.qbb.util.DesUtil;
 import com.qbb.util.FileToZipUtil;
 import com.qbb.util.FileUnZipUtil;
 import com.qbb.util.PsiAnnotationSearchUtil;
+import org.apache.commons.lang.StringUtils;
 import org.codehaus.jettison.json.JSONException;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -66,6 +69,10 @@ public class BuildJsonForYapi {
     }
 
     static Set<String> filePaths = new CopyOnWriteArraySet<>();
+
+    static Pattern humpPattern = Pattern.compile("[A-Z]");
+
+    static final String DASH = "-";
 
     /**
      * 批量生成 接口数据
@@ -86,6 +93,9 @@ public class BuildJsonForYapi {
         }
         if (Objects.nonNull(selectedClass.getDocComment())) {
             classMenu = DesUtil.getMenu(selectedClass.getText());
+        }
+        if (StringUtils.isEmpty(classMenu)) {
+            classMenu = camelToLine(selectedClass.getName());
         }
         ArrayList<YapiApiDTO> yapiApiDTOS = new ArrayList<>();
         if (Strings.isNullOrEmpty(selectedText) || selectedText.equals(selectedClass.getName())) {
@@ -1109,6 +1119,26 @@ public class BuildJsonForYapi {
                 }
             }
         });
+    }
+
+    /**
+     * 驼峰转-  兼容swagger
+     *
+     * @param camelCase
+     * @return
+     */
+    private static String camelToLine(String camelCase) {
+        Matcher matcher = humpPattern.matcher(camelCase);
+        StringBuffer sb = new StringBuffer();
+        while (matcher.find()) {
+            matcher.appendReplacement(sb, DASH + matcher.group(0).toLowerCase());
+        }
+        matcher.appendTail(sb);
+        String result = sb.toString();
+        if (result.startsWith(DASH)) {
+            result.substring(DASH.length());
+        }
+        return result;
     }
 
 }
