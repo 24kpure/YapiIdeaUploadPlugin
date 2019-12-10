@@ -826,8 +826,9 @@ public class BuildJsonForYapi {
         if (swaggerOperationAnnotation != null) {
             PsiNameValuePair[] psiNameValuePairs = swaggerOperationAnnotation.getParameterList().getAttributes();
             if (psiNameValuePairs.length > 0) {
-                if (psiNameValuePairs[0].getLiteralValue() != null) {
-                    remark = psiNameValuePairs[0].getLiteralValue();
+                String annotationValue = StringUtils.defaultIfEmpty(psiNameValuePairs[0].getLiteralValue(), psiNameValuePairs[0].getValue() == null ? null : psiNameValuePairs[0].getValue().getText());
+                if (annotationValue != null) {
+                    remark = annotationValue;
                 } else {
                     PsiAnnotationMemberValue psiAnnotationMemberValue = swaggerOperationAnnotation.findAttributeValue("value");
                     if (psiAnnotationMemberValue != null) {
