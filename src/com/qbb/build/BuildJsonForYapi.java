@@ -2,6 +2,7 @@ package com.qbb.build;
 
 import com.google.common.base.Strings;
 import com.google.gson.JsonObject;
+import com.intellij.codeInsight.AnnotationUtil;
 import com.intellij.notification.Notification;
 import com.intellij.notification.NotificationDisplayType;
 import com.intellij.notification.NotificationGroup;
@@ -21,6 +22,7 @@ import com.intellij.psi.PsiEnumConstant;
 import com.intellij.psi.PsiField;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiMethod;
+import com.intellij.psi.PsiModifierListOwner;
 import com.intellij.psi.PsiNameValuePair;
 import com.intellij.psi.PsiParameter;
 import com.intellij.psi.PsiPrimitiveType;
@@ -34,6 +36,7 @@ import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.psi.util.PsiUtil;
 import com.qbb.constant.HttpMethodConstant;
 import com.qbb.constant.JavaConstant;
+import com.qbb.constant.PupuConstants;
 import com.qbb.constant.SpringMVCConstant;
 import com.qbb.constant.SwaggerConstants;
 import com.qbb.dto.YapiApiDTO;
@@ -161,25 +164,22 @@ public class BuildJsonForYapi {
                 }
             }
         }
+
+        //拼接apiCode
+        String apiCode = null;
+        String classApiCode = getPsiParameterAnnotationValue(selectedClass, PupuConstants.API_CODE);
+        String methodApiCode = getPsiParameterAnnotationValue(psiMethodTarget, PupuConstants.API_CODE);
+        if (StringUtils.isNotEmpty(classApiCode) && StringUtils.isNotEmpty(methodApiCode)) {
+            apiCode = classApiCode + methodApiCode;
+        }
+
         //获取swagger注解
-        PsiAnnotation swaggerPsiAnnotation = PsiAnnotationSearchUtil.findAnnotation(psiMethodTarget, SwaggerConstants.API_OPERATION);
-        if (swaggerPsiAnnotation != null) {
-            String operation = "";
-            PsiNameValuePair[] psiNameValuePairs = swaggerPsiAnnotation.getParameterList().getAttributes();
-            if (psiNameValuePairs.length > 0) {
-                if (psiNameValuePairs[0].getLiteralValue() != null) {
-                    operation = psiNameValuePairs[0].getLiteralValue();
-                } else {
-                    PsiAnnotationMemberValue psiAnnotationMemberValue = swaggerPsiAnnotation.findAttributeValue("value");
-                    if (psiAnnotationMemberValue != null) {
-                        String[] results = psiAnnotationMemberValue.getReference().resolve().getText().split("=");
-                        operation = results[results.length - 1].split(";")[0].replace("\"", "").trim();
-                    }
-                }
-                Notification info = notificationGroup.createNotification("apiOperation:" + operation, NotificationType.INFORMATION);
-                Notifications.Bus.notify(info, project);
-                yapiApiDTO.setDesc(operation);
-            }
+        String operation = getPsiParameterAnnotationValue(psiMethodTarget, SwaggerConstants.API_OPERATION);
+        if (StringUtils.isNotEmpty(operation)) {
+            operation = operation + ":" + apiCode;
+            Notification info = notificationGroup.createNotification("apiOperation:" + operation, NotificationType.INFORMATION);
+            Notifications.Bus.notify(info, project);
+            yapiApiDTO.setDesc(operation);
         }
 
         PsiAnnotation psiAnnotationMethod = PsiAnnotationSearchUtil.findAnnotation(psiMethodTarget, SpringMVCConstant.RequestMapping);
@@ -358,7 +358,6 @@ public class BuildJsonForYapi {
         return null;
     }
 
-
     /**
      * @description: 获得请求参数
      * @param: [project, yapiApiDTO, psiMethodTarget]
@@ -369,13 +368,23 @@ public class BuildJsonForYapi {
     public static void getRequest(Project project, YapiApiDTO yapiApiDTO, PsiMethod psiMethodTarget) throws JSONException {
         PsiParameter[] psiParameters = psiMethodTarget.getParameterList().getParameters();
         if (psiParameters.length > 0) {
-            ArrayList list = new ArrayList<YapiQueryDTO>();
+            ArrayList yapiParamList = new ArrayList<YapiQueryDTO>();
             List<YapiHeaderDTO> yapiHeaderDTOList = new ArrayList<>();
             List<YapiPathVariableDTO> yapiPathVariableDTOList = new ArrayList<>();
             for (PsiParameter psiParameter : psiParameters) {
                 if (JavaConstant.HttpServletRequest.equals(psiParameter.getType().getCanonicalText()) || JavaConstant.HttpServletResponse.equals(psiParameter.getType().getCanonicalText())) {
                     continue;
                 }
+
+                //pupu jwt check
+                if (PsiAnnotationSearchUtil.findAnnotation(psiParameter, PupuConstants.AUTHENTICATION_PRINCIPAL) != null) {
+                    YapiHeaderDTO yapiHeaderDTO = new YapiHeaderDTO();
+                    yapiHeaderDTO.setDesc("用户签名，JWT Bearer");
+                    yapiHeaderDTO.setName("Authorization");
+                    yapiHeaderDTOList.add(yapiHeaderDTO);
+                    continue;
+                }
+
                 PsiAnnotation psiAnnotation = PsiAnnotationSearchUtil.findAnnotation(psiParameter, SpringMVCConstant.RequestBody);
                 if (psiAnnotation != null) {
                     yapiApiDTO.setRequestBody(getResponse(project, psiParameter.getType(), null));
@@ -495,6 +504,10 @@ public class BuildJsonForYapi {
                             if (Strings.isNullOrEmpty(yapiPathVariableDTO.getName())) {
                                 yapiPathVariableDTO.setName(psiParameter.getName());
                             }
+                            String desc = getPsiParameterAnnotationValue(psiParameter, SwaggerConstants.API_PARAM);
+                            if (StringUtils.isNotEmpty(desc)) {
+                                yapiPathVariableDTO.setDesc(desc);
+                            }
                             yapiPathVariableDTOList.add(yapiPathVariableDTO);
                         } else {
                             if (Strings.isNullOrEmpty(yapiQueryDTO.getDesc())) {
@@ -507,13 +520,17 @@ public class BuildJsonForYapi {
                             if (Strings.isNullOrEmpty(yapiQueryDTO.getName())) {
                                 yapiQueryDTO.setName(psiParameter.getName());
                             }
-                            list.add(yapiQueryDTO);
+                            String desc = getPsiParameterAnnotationValue(psiParameter, SwaggerConstants.API_PARAM);
+                            if (StringUtils.isNotEmpty(desc)) {
+                                yapiQueryDTO.setDesc(desc);
+                            }
+                            yapiParamList.add(yapiQueryDTO);
                         }
                     } else {
                         if (HttpMethodConstant.GET.equals(yapiApiDTO.getMethod())) {
                             List<Map<String, String>> requestList = getRequestForm(project, psiParameter, psiMethodTarget);
                             for (Map<String, String> map : requestList) {
-                                list.add(new YapiQueryDTO(map.get("desc"), map.get("example"), map.get("name")));
+                                yapiParamList.add(new YapiQueryDTO(map.get("desc"), map.get("example"), map.get("name")));
                             }
                         } else if (HttpMethodConstant.POST.equals(yapiApiDTO.getMethod())) {
                             // 支持实体对象接收
@@ -528,7 +545,7 @@ public class BuildJsonForYapi {
                     }
                 }
             }
-            yapiApiDTO.setParams(list);
+            yapiApiDTO.setParams(yapiParamList);
             yapiApiDTO.setHeader(yapiHeaderDTOList);
             yapiApiDTO.setReq_params(yapiPathVariableDTOList);
         }
@@ -822,22 +839,7 @@ public class BuildJsonForYapi {
         }
 
         //swagger支持
-        PsiAnnotation swaggerOperationAnnotation = PsiAnnotationSearchUtil.findAnnotation(field, SwaggerConstants.API_MODEL_PROPERTY);
-        if (swaggerOperationAnnotation != null) {
-            PsiNameValuePair[] psiNameValuePairs = swaggerOperationAnnotation.getParameterList().getAttributes();
-            if (psiNameValuePairs.length > 0) {
-                String annotationValue = StringUtils.defaultIfEmpty(psiNameValuePairs[0].getLiteralValue(), psiNameValuePairs[0].getValue() == null ? null : psiNameValuePairs[0].getValue().getText());
-                if (annotationValue != null) {
-                    remark = annotationValue;
-                } else {
-                    PsiAnnotationMemberValue psiAnnotationMemberValue = swaggerOperationAnnotation.findAttributeValue("value");
-                    if (psiAnnotationMemberValue != null) {
-                        String[] results = psiAnnotationMemberValue.getReference().resolve().getText().split("=");
-                        remark = results[results.length - 1].split(";")[0].replace("\"", "").trim();
-                    }
-                }
-            }
-        }
+        remark = StringUtils.defaultIfEmpty(getPsiParameterAnnotationValue(field, SwaggerConstants.API_MODEL_PROPERTY), "");
 
         // 如果是基本类型
         if (type instanceof PsiPrimitiveType) {
@@ -1140,6 +1142,22 @@ public class BuildJsonForYapi {
             result = result.substring(DASH.length());
         }
         return result;
+    }
+
+    /**
+     * 获取psi注解value
+     *
+     * @param psiParameter
+     * @param annotationName
+     * @return
+     */
+    private static String getPsiParameterAnnotationValue(PsiModifierListOwner psiParameter, String annotationName) {
+        PsiAnnotation annotation = PsiAnnotationSearchUtil.findAnnotation(psiParameter, annotationName);
+        if (annotation == null) {
+            return null;
+        }
+
+        return AnnotationUtil.getStringAttributeValue(annotation, PsiAnnotation.DEFAULT_REFERENCED_METHOD_NAME);
     }
 
 }
