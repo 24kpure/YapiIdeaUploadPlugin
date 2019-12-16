@@ -1,4 +1,5 @@
 #### 变更历史
+- 1.7.6: 内部版本，支持swagger部分注解，返回数据驼峰转下划线，支持apiCode，支持jwtUser，允许在ApiModelProperties中example填写mock数据
 - 1.7.4: 兼容老版本,支持统一返回值设置(@zouzou6321),新增默认为类名上传,枚举字段解析(@sun7132568),统一多模块参数,解决枚举打包问题,
 - 1.7.3: 支持map,解决同包问题,去除缓存,支持notblank,支持package menu
 - 1.7.2: 支持LocalDate,LocalTime,LocalDateTime
