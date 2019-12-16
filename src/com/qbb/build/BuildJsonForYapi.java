@@ -77,6 +77,8 @@ public class BuildJsonForYapi {
 
     static final String DASH = "-";
 
+    static final String UNDER_LINE = "_";
+
     /**
      * 批量生成 接口数据
      *
@@ -98,7 +100,7 @@ public class BuildJsonForYapi {
             classMenu = DesUtil.getMenu(selectedClass.getText());
         }
         if (StringUtils.isEmpty(classMenu)) {
-            classMenu = camelToLine(selectedClass.getName());
+            classMenu = camelToLine(selectedClass.getName(), DASH);
         }
         ArrayList<YapiApiDTO> yapiApiDTOS = new ArrayList<>();
         if (Strings.isNullOrEmpty(selectedText) || selectedText.equals(selectedClass.getName())) {
@@ -829,7 +831,7 @@ public class BuildJsonForYapi {
             return;
         }
         PsiType type = field.getType();
-        String name = field.getName();
+        String name = camelToLine(field.getName(),UNDER_LINE);
         String remark = "";
         if (field.getDocComment() != null) {
             remark = DesUtil.getFiledDesc(field.getDocComment());
@@ -1125,21 +1127,21 @@ public class BuildJsonForYapi {
     }
 
     /**
-     * 驼峰转-  兼容swagger
+     * 驼峰转化  兼容swagger
      *
      * @param camelCase
      * @return
      */
-    private static String camelToLine(String camelCase) {
+    private static String camelToLine(String camelCase, String split) {
         Matcher matcher = humpPattern.matcher(camelCase);
         StringBuffer sb = new StringBuffer();
         while (matcher.find()) {
-            matcher.appendReplacement(sb, DASH + matcher.group(0).toLowerCase());
+            matcher.appendReplacement(sb, split + matcher.group(0).toLowerCase());
         }
         matcher.appendTail(sb);
         String result = sb.toString();
-        if (result.startsWith(DASH)) {
-            result = result.substring(DASH.length());
+        if (result.startsWith(split)) {
+            result = result.substring(split.length());
         }
         return result;
     }
