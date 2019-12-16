@@ -13,6 +13,15 @@
       <a href="https://github.com/diwand/YapiIdeaUploadPlugin">how to use</a> <br>
      1.7.6:<br>
       <em>
+       - 支持swagger
+       - 返回数据驼峰转下划线
+       - 支持apiCode
+       - 支持jwtUser
+       - 允许在ApiModelProperties中example填写mock数据
+      <em>
+      <br>
+     1.7.6:<br>
+      <em>
       - support base mock power
       </em><br>
 
