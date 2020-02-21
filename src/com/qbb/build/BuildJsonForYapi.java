@@ -386,6 +386,15 @@ public class BuildJsonForYapi {
                     yapiHeaderDTOList.add(yapiHeaderDTO);
                     continue;
                 }
+                //pageable 支持
+                String canonicalText = psiParameter.getType().getCanonicalText();
+                if (PupuConstants.PAGEABLE.equals(canonicalText)) {
+                    YapiQueryDTO pageQueryDTO = new YapiQueryDTO("页码", "1", "page");
+                    yapiParamList.add(pageQueryDTO);
+                    YapiQueryDTO sizeQueryDTO = new YapiQueryDTO("页大小", "5", "size");
+                    yapiParamList.add(sizeQueryDTO);
+                    continue;
+                }
 
                 PsiAnnotation psiAnnotation = PsiAnnotationSearchUtil.findAnnotation(psiParameter, SpringMVCConstant.RequestBody);
                 if (psiAnnotation != null) {
@@ -572,15 +581,17 @@ public class BuildJsonForYapi {
             requestForm.add(map);
         } else {
             PsiClass psiClass = JavaPsiFacade.getInstance(project).findClass(psiParameter.getType().getCanonicalText(), GlobalSearchScope.allScope(project));
+            boolean hasCamelToLine = PsiAnnotationSearchUtil.findAnnotation(psiParameter, PupuConstants.QUERY_PARAM_OBJECT) == null;
             for (PsiField field : psiClass.getAllFields()) {
                 if (field.getModifierList().hasModifierProperty("final")) {
                     continue;
                 }
                 Map<String, String> map = new HashMap<>();
-                map.put("name", field.getName());
+                map.put("name", hasCamelToLine ? camelToLine(field.getName(), UNDER_LINE) : field.getName());
                 map.put("type", "text");
                 String remark = DesUtil.getFiledDesc(field.getDocComment());
-                remark = DesUtil.getLinkRemark(remark, project, field);
+                String apiModelProperty = getPsiParameterAnnotationValue(field, SwaggerConstants.API_MODEL_PROPERTY);
+                remark = Strings.isNullOrEmpty(apiModelProperty) ? DesUtil.getLinkRemark(remark, project, field) : apiModelProperty;
                 map.put("desc", remark);
                 if (Objects.nonNull(field.getType().getPresentableText())) {
                     Object obj = NormalTypes.normalTypes.get(field.getType().getPresentableText());
@@ -827,7 +838,8 @@ public class BuildJsonForYapi {
      * @date: 2019/5/15
      */
     public static void getField(PsiField field, Project project, KV kv, String[] childType, Integer index, Set<String> pNames) {
-        if (field.getModifierList().hasModifierProperty("final")) {
+        if (field.getModifierList().hasModifierProperty("final")
+                && field.getModifierList().hasModifierProperty("static")) {
             return;
         }
         PsiType type = field.getType();
